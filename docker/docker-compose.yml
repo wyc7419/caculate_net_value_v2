@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  # TimescaleDB 数据库
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: netvalue_timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-net_value_db}
+      POSTGRES_USER: ${POSTGRES_USER:-netvalue_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-your_secure_password}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-netvalue_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - netvalue_network
+
+  # Web 服务
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: netvalue_web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-5000}:5000"
+    environment:
+      # 数据库配置
+      TIMESCALE_HOST: timescaledb
+      TIMESCALE_PORT: 5432
+      TIMESCALE_DB: ${POSTGRES_DB:-net_value_db}
+      TIMESCALE_USER: ${POSTGRES_USER:-netvalue_user}
+      TIMESCALE_PASSWORD: ${POSTGRES_PASSWORD:-your_secure_password}
+      
+      # 应用配置
+      FLASK_ENV: ${FLASK_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      # 挂载配置文件（如果需要外部配置）
+      - ../.env:/app/.env:ro
+      # 挂载日志目录
+      - ../logs:/app/logs
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - netvalue_network
+
+  # 外部 API 服务（可选）
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: netvalue_api
+    restart: unless-stopped
+    command: python net_value_api/server.py --host 0.0.0.0 --port 8080
+    ports:
+      - "${API_PORT:-8080}:8080"
+    environment:
+      TIMESCALE_HOST: timescaledb
+      TIMESCALE_PORT: 5432
+      TIMESCALE_DB: ${POSTGRES_DB:-net_value_db}
+      TIMESCALE_USER: ${POSTGRES_USER:-netvalue_user}
+      TIMESCALE_PASSWORD: ${POSTGRES_PASSWORD:-your_secure_password}
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    networks:
+      - netvalue_network
+
+volumes:
+  timescaledb_data:
+    driver: local
+
+networks:
+  netvalue_network:
+    driver: bridge
+

@@ -1,0 +1,24 @@
+# Net Value Calculator Dependencies
+
+# Database
+psycopg2-binary>=2.9.9
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# HTTP Requests
+requests>=2.31.0
+
+# Visualization
+matplotlib>=3.7.0
+
+# Web Framework
+Flask>=3.0.0
+Flask-CORS>=4.0.0
+
+# Configuration
+python-dotenv>=1.0.0
+
+# System Utilities
+psutil>=5.9.0

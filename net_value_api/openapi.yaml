@@ -1,0 +1,371 @@
+openapi: 3.0.0
+info:
+  title: 净值分析系统 API
+  description: |
+    提供账户净值数据查询和导出功能的 RESTful API
+    
+    ## 功能特性
+    - 查询可用的时间区间
+    - 获取指定地址和时间区间的净值数据
+    - 支持字段筛选、数据归一化、时间过滤
+    - 支持分页查询
+    
+    ## 数据说明
+    - 数据基于 TimescaleDB 存储
+    - 时间戳为毫秒级 Unix 时间戳
+    - 净值数据已通过快照校验
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+
+servers:
+  - url: http://localhost:5000
+    description: 本地开发服务器
+  - url: https://api.example.com
+    description: 生产环境服务器
+
+tags:
+  - name: intervals
+    description: 时间区间相关接口
+  - name: data
+    description: 净值数据查询接口
+
+paths:
+  /netvalue/intervals:
+    get:
+      summary: 获取所有可用时间区间
+      description: 返回系统支持的所有时间区间列表（如 1h, 2h, 4h, 8h, 12h, 1d）
+      tags:
+        - intervals
+      responses:
+        '200':
+          description: 成功返回时间区间列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  intervals:
+                    type: array
+                    items:
+                      type: string
+                    example: ["1h", "2h", "4h", "8h", "12h", "1d"]
+              example:
+                success: true
+                intervals: ["1h", "2h", "4h", "8h", "12h", "1d"]
+
+  /netvalue/data/{interval}/{address}:
+    get:
+      summary: 获取指定地址的净值数据
+      description: |
+        获取指定时间区间和地址的净值数据，支持多种查询参数：
+        - `fields`: 指定返回的字段
+        - `from_first_trade`: 从第一笔交易开始过滤
+        - `normalize`: 归一化净值数据
+        - `page` & `page_size`: 分页查询
+      tags:
+        - data
+      parameters:
+        - name: interval
+          in: path
+          required: true
+          description: 时间区间（1h, 2h, 4h, 8h, 12h, 1d）
+          schema:
+            type: string
+            enum: ["1h", "2h", "4h", "8h", "12h", "1d"]
+          example: "1h"
+        
+        - name: address
+          in: path
+          required: true
+          description: 账户地址（以太坊地址格式）
+          schema:
+            type: string
+            pattern: '^0x[a-fA-F0-9]{40}$'
+          example: "0x1234567890abcdef1234567890abcdef12345678"
+        
+        - name: fields
+          in: query
+          required: false
+          description: |
+            指定返回的字段，多个字段用逗号分隔。
+            可选字段：net_value, cumulative_pnl, total_assets, total_shares, 
+            spot_account_value, perp_account_value, realized_pnl, virtual_pnl
+            默认返回所有字段（all）
+          schema:
+            type: string
+            default: "all"
+          examples:
+            all:
+              value: "all"
+              summary: 返回所有字段
+            single:
+              value: "net_value"
+              summary: 只返回净值
+            multiple:
+              value: "net_value,cumulative_pnl,total_assets"
+              summary: 返回多个字段
+        
+        - name: from_first_trade
+          in: query
+          required: false
+          description: |
+            是否从第一笔交易开始过滤数据。
+            当 trade 数据不全时，从第一笔交易开始会让结果更精确
+          schema:
+            type: boolean
+            default: true
+          example: true
+        
+        - name: normalize
+          in: query
+          required: false
+          description: |
+            是否归一化净值数据（将起始点归一化为1.0）。
+            仅当 from_first_trade=true 且包含 net_value 字段时有效。
+            使用分页时自动禁用归一化
+          schema:
+            type: boolean
+            default: true
+          example: true
+        
+        - name: page
+          in: query
+          required: false
+          description: |
+            页码（从1开始）。
+            启用分页时会自动禁用归一化功能
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+        
+        - name: page_size
+          in: query
+          required: false
+          description: 每页返回的记录数（最大5000）
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 5000
+            default: 1000
+          example: 1000
+      
+      responses:
+        '200':
+          description: 成功返回净值数据
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  interval:
+                    type: string
+                    example: "1h"
+                  address:
+                    type: string
+                    example: "0x1234567890abcdef1234567890abcdef12345678"
+                  record_count:
+                    type: integer
+                    description: 返回的记录数
+                    example: 100
+                  first_trade_timestamp:
+                    type: integer
+                    nullable: true
+                    description: 第一笔交易的时间戳（毫秒）
+                    example: 1693497600000
+                  from_first_trade:
+                    type: boolean
+                    description: 是否从第一笔交易开始过滤
+                    example: true
+                  normalize:
+                    type: boolean
+                    description: 实际使用的归一化设置
+                    example: true
+                  pagination:
+                    type: object
+                    nullable: true
+                    description: 分页信息（启用分页时存在）
+                    properties:
+                      current_page:
+                        type: integer
+                        example: 1
+                      page_size:
+                        type: integer
+                        example: 1000
+                      total_records:
+                        type: integer
+                        example: 5000
+                      total_pages:
+                        type: integer
+                        example: 5
+                      has_next:
+                        type: boolean
+                        example: true
+                      has_prev:
+                        type: boolean
+                        example: false
+                  data:
+                    type: object
+                    description: 净值数据（字段根据 fields 参数动态变化）
+                    properties:
+                      timestamps:
+                        type: array
+                        items:
+                          type: integer
+                        description: 时间戳数组（毫秒）
+                        example: [1693497600000, 1693501200000, 1693504800000]
+                      net_values:
+                        type: array
+                        items:
+                          type: number
+                        description: 净值数组
+                        example: [1.0, 1.05, 1.08]
+                      cumulative_pnl:
+                        type: array
+                        items:
+                          type: number
+                        description: 累计盈亏数组
+                        example: [0, 50, 80]
+                      total_assets:
+                        type: array
+                        items:
+                          type: number
+                        description: 总资产数组
+                        example: [1000, 1050, 1080]
+                      total_shares:
+                        type: array
+                        items:
+                          type: number
+                        description: 总份额数组
+                        example: [1000, 1000, 1000]
+                      spot_account_value:
+                        type: array
+                        items:
+                          type: number
+                        description: 现货账户价值数组
+                        example: [500, 525, 540]
+                      perp_account_value:
+                        type: array
+                        items:
+                          type: number
+                        description: 合约账户价值数组
+                        example: [500, 525, 540]
+                      realized_pnl:
+                        type: array
+                        items:
+                          type: number
+                        description: 已实现盈亏数组
+                        example: [0, 30, 50]
+                      virtual_pnl:
+                        type: array
+                        items:
+                          type: number
+                        description: 虚拟盈亏数组
+                        example: [0, 20, 30]
+              examples:
+                default:
+                  summary: 默认查询（所有字段）
+                  value:
+                    success: true
+                    interval: "1h"
+                    address: "0x1234567890abcdef1234567890abcdef12345678"
+                    record_count: 3
+                    first_trade_timestamp: 1693497600000
+                    from_first_trade: true
+                    normalize: true
+                    pagination: null
+                    data:
+                      timestamps: [1693497600000, 1693501200000, 1693504800000]
+                      net_values: [1.0, 1.05, 1.08]
+                      cumulative_pnl: [0, 50, 80]
+                      total_assets: [1000, 1050, 1080]
+                      total_shares: [1000, 1000, 1000]
+                      spot_account_value: [500, 525, 540]
+                      perp_account_value: [500, 525, 540]
+                      realized_pnl: [0, 30, 50]
+                      virtual_pnl: [0, 20, 30]
+                
+                with_pagination:
+                  summary: 分页查询
+                  value:
+                    success: true
+                    interval: "1h"
+                    address: "0x1234567890abcdef1234567890abcdef12345678"
+                    record_count: 1000
+                    first_trade_timestamp: 1693497600000
+                    from_first_trade: true
+                    normalize: false
+                    pagination:
+                      current_page: 1
+                      page_size: 1000
+                      total_records: 5000
+                      total_pages: 5
+                      has_next: true
+                      has_prev: false
+                    data:
+                      timestamps: [1693497600000]
+                      net_values: [1.0]
+                
+                selected_fields:
+                  summary: 只查询净值字段
+                  value:
+                    success: true
+                    interval: "1h"
+                    address: "0x1234567890abcdef1234567890abcdef12345678"
+                    record_count: 3
+                    first_trade_timestamp: 1693497600000
+                    from_first_trade: true
+                    normalize: true
+                    pagination: null
+                    data:
+                      timestamps: [1693497600000, 1693501200000, 1693504800000]
+                      net_values: [1.0, 1.05, 1.08]
+        
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "不支持的时间区间"
+        
+        '404':
+          description: 数据不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "未找到数据"
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: "错误信息"
+
