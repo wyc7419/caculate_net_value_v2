@@ -17,10 +17,10 @@ def get_intervals():
     Returns:
         JSON响应，包含所有支持的时间区间列表
     """
-    from web.app import db_manager
+    from config import settings
     
-    # 从数据库管理器获取所有支持的时间区间
-    intervals = list(db_manager.INTERVAL_TABLE_MAP.keys())
+    # 从配置文件读取支持的时间区间
+    intervals = settings.SUPPORTED_INTERVALS
     
     return jsonify({
         'success': True,
