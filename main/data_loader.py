@@ -425,15 +425,15 @@ class DataLoader:
                         elif raw_data:
                             trades_data = [self._normalize_trade_fields(item) for item in raw_data]
                 
-                # 添加到总列表
-                all_trades.extend(trades_data)
-                
-                # 检查是否还有更多数据
-                if len(trades_data) < page_size:
-                    break
-                
-                # 继续下一页
-                page += 1
+                    # 添加到总列表
+                    all_trades.extend(trades_data)
+                    
+                    # 检查是否还有更多数据
+                    if len(trades_data) < page_size:
+                        break
+                    
+                    # 继续下一页
+                    page += 1
             
             # 循环结束后返回结果
             return all_trades

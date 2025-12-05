@@ -418,12 +418,12 @@ class PositionBackwardCalculator:
                 direction = 'short'
             else:
                 continue  # 跳过持仓为0的
-            
-            next_positions.append({
-                'coin': coin,
-                'amount': amount,
-                'dir': direction
-            })
+                
+                next_positions.append({
+                    'coin': coin,
+                    'amount': amount,
+                    'dir': direction
+                })
         
         return next_positions
     
@@ -863,8 +863,8 @@ class PositionBackwardCalculator:
                             print(f"       - {diff}")
                     
                 # 无论校验是否通过，都用快照数据替换（防止误差累积）
-                current_spot = spot_snapshot.copy()
-                current_perp = [pos.copy() for pos in perp_snapshot]
+                    current_spot = spot_snapshot.copy()
+                    current_perp = [pos.copy() for pos in perp_snapshot]
             
             # 显示进度
             if (idx - start_idx) % 100000 == 0:
